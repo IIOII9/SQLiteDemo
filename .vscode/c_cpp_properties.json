@@ -1,0 +1,29 @@
+{
+    "configurations": [
+      {
+        "name": "Win32",
+        "includePath": [
+          "${workspaceFolder}/**",
+          "C:/msys64/mingw64/include",
+          "C:/msys64/mingw64/include/c++/14.2.0",
+          "C:/msys64/mingw64/include/c++/14.2.0/x86_64-w64-mingw32",
+          "C:/msys64/mingw64/include/QtWidgets",
+          "${workspaceFolder}/External/log4cpp-master/include"
+        ],
+        "defines": [
+        "_DEBUG",
+        "UNICODE",
+        "QT_WIDGETS_LIB",
+        "QT_CORE_LIB",
+        "QT_GUI_LIB"
+        ],
+        "compilerPath": "C:/msys64/mingw64/bin/g++.exe",       
+        "cStandard": "c17",
+        "cppStandard": "c++17",
+        "intelliSenseMode": "windows-gcc-x64"
+
+      }
+    ],
+    "version": 4
+  }
+  
