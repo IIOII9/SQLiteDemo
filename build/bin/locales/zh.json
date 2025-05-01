@@ -1,0 +1,15 @@
+{
+  "ChooseFile": "选择文件",
+  "SupportedFiles": "支持的文件类型",
+  "SaveSuccess": "保存成功",
+  "NoAttachment": "无附件",
+  "ExportAttachment": "导出附件",
+  "AttachmentSaved": "附件已保存",
+  "SaveFailed": "保存失败",
+  "NoAttachmentInRecord": "该记录没有附件",
+  "SelectRecordHint": "请先选择一条记录",
+  "ReplaceAttachment": "是否替换已有附件？",
+  "FileReadFailed": "读取文件失败",
+  "OnlyAllow": "仅允许以下文件类型：",
+  "InvalidType": "无效的文件类型"
+}
