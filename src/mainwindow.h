@@ -1,12 +1,14 @@
-// mainwindow.h
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
+
 #include <QMainWindow>
 #include <QSqlDatabase>
-#include <QTableWidget>
-#include <QPushButton>
+#include <QSqlTableModel>
+#include <QTableView>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QLabel>
+#include <QSpinBox>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -15,24 +17,31 @@ public:
     ~MainWindow();
 
 private slots:
-    void insertRecord();
-    void uploadAttachment();
-    void exportAttachment();
+    void search();
+    void nextPage();
+    void prevPage();
+    void addEntry();
+    void exportCSV();
 
 private:
     void setupUI();
-    void loadRecords();
-    bool isValidFile(const QString &filePath);
+    void loadPage();
+    int getTotalRowCount();
 
     QSqlDatabase db;
-    QLineEdit *nameEdit;
-    QLabel *fileInfoLabel;
-    QPushButton *uploadButton;
-    QPushButton *insertButton;
+    QSqlTableModel *model;
+    QTableView *tableView;
+    QLineEdit *searchEdit;
+    QPushButton *searchButton;
+    QPushButton *nextButton;
+    QPushButton *prevButton;
+    QPushButton *addButton;
     QPushButton *exportButton;
-    QTableWidget *table;
+    QLabel *pageLabel;
+    QSpinBox *pageSizeSpin;
 
-    QByteArray fileData;
-    QString fileType;
+    int currentPage = 0;
+    int pageSize = 10;
 };
+
 #endif // MAINWINDOW_H

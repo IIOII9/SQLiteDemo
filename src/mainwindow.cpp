@@ -1,225 +1,188 @@
-// mainwindow.cpp
 #include "mainwindow.h"
-#include "ui_strings.h"
 #include <QVBoxLayout>
-#include <QFileDialog>
-#include <QFile>
-#include <QMessageBox>
+#include <QHBoxLayout>
 #include <QSqlQuery>
 #include <QSqlError>
-#include <QHeaderView>
-#include <QFileInfo>
-//#include <QDateTime>
-#include <QDebug>
+#include <QSqlRecord>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QTextStream>
+#include <QFile>
+#include <qdebug>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setupUI();
-
     db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName("example.db");
     if (!db.open()) {
-        QMessageBox::critical(this, QStringLiteral("DB Error"), db.lastError().text());
-        return;
+        QMessageBox::critical(this, "Error", "Failed to open database.");
+        exit(1);
     }
 
-    QSqlQuery query;
-    if (!query.exec("CREATE TABLE IF NOT EXISTS records ("
-               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-               "name TEXT,"
-               "attachment BLOB,"
-               "type TEXT)")) {
-        qDebug() << "Create table error:" << query.lastError();
-    }
+    QSqlQuery q;
+    q.exec("CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)");
 
-    loadRecords();
+    model = new QSqlTableModel(this, db);
+    model->setTable("people");
+    model->setEditStrategy(QSqlTableModel::OnManualSubmit);
+    model->setSort(0, Qt::AscendingOrder);
+
+    setupUI();
+    loadPage();
 }
 
 MainWindow::~MainWindow() {}
 
 void MainWindow::setupUI() {
     QWidget *central = new QWidget(this);
-    QVBoxLayout *layout = new QVBoxLayout(central);
+    QVBoxLayout *mainLayout = new QVBoxLayout(central);
 
-    nameEdit = new QLineEdit(this);
-    nameEdit->setPlaceholderText(QStringLiteral("名称"));  
-    layout->addWidget(nameEdit);
+    // Search row
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+    searchEdit = new QLineEdit();
+    searchEdit->setPlaceholderText("Search name...");
+    searchButton = new QPushButton("Search");
+    connect(searchButton, &QPushButton::clicked, this, &MainWindow::search);
+    searchLayout->addWidget(searchEdit);
+    searchLayout->addWidget(searchButton);
 
-    fileInfoLabel = new QLabel(QString::fromStdWString(UIStrings::Get(UIKey::NoAttachment)), this);
-    layout->addWidget(fileInfoLabel);
+    // Table view
+    tableView = new QTableView();
+    tableView->setModel(model);
+    tableView->setSortingEnabled(true);
+    tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    tableView->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    uploadButton = new QPushButton(QString::fromStdWString(UIStrings::Get(UIKey::ChooseFile)), this); 
-    connect(uploadButton, &QPushButton::clicked, this, &MainWindow::uploadAttachment);
-    layout->addWidget(uploadButton);
+    // Control buttons
+    QHBoxLayout *controlLayout = new QHBoxLayout();
+    prevButton = new QPushButton("Previous");
+    nextButton = new QPushButton("Next");
+    addButton = new QPushButton("Add");
+    exportButton = new QPushButton("Export CSV");
+    pageSizeSpin = new QSpinBox();
+    pageSizeSpin->setRange(1, 100);
+    pageSizeSpin->setValue(pageSize);
+    pageLabel = new QLabel();
 
-    insertButton = new QPushButton(QStringLiteral("插入记录"), this);  
-    connect(insertButton, &QPushButton::clicked, this, &MainWindow::insertRecord);
-    layout->addWidget(insertButton);
-
-    exportButton = new QPushButton(QString::fromStdWString(UIStrings::Get(UIKey::ExportAttachment)), this);
-    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportAttachment);
-    layout->addWidget(exportButton);
-
-    table = new QTableWidget(this);
-    table->setColumnCount(3);
-    table->setHorizontalHeaderLabels({
-        QStringLiteral("ID"), 
-        QStringLiteral("名称"), 
-        QStringLiteral("类型")  
+    connect(prevButton, &QPushButton::clicked, this, &MainWindow::prevPage);
+    connect(nextButton, &QPushButton::clicked, this, &MainWindow::nextPage);
+    connect(addButton, &QPushButton::clicked, this, &MainWindow::addEntry);
+    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportCSV);
+    connect(pageSizeSpin, qOverload<int>(&QSpinBox::valueChanged), [=](int val) {
+        pageSize = val;
+        currentPage = 0;
+        loadPage();
     });
-    table->horizontalHeader()->setStretchLastSection(true);
-    table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    layout->addWidget(table);
+
+    controlLayout->addWidget(prevButton);
+    controlLayout->addWidget(nextButton);
+    controlLayout->addWidget(new QLabel("Page size:"));
+    controlLayout->addWidget(pageSizeSpin);
+    controlLayout->addWidget(pageLabel);
+    controlLayout->addStretch();
+    controlLayout->addWidget(addButton);
+    controlLayout->addWidget(exportButton);
+
+    mainLayout->addLayout(searchLayout);
+    mainLayout->addWidget(tableView);
+    mainLayout->addLayout(controlLayout);
 
     setCentralWidget(central);
+    resize(800, 500);
 }
 
-void MainWindow::insertRecord() {
-    QString name = nameEdit->text().trimmed();
-    if (name.isEmpty()) return;
-
-    QSqlQuery query;
-    query.prepare("INSERT INTO records (name, attachment, type) VALUES (?, ?, ?)");
-    query.addBindValue(name);
-    query.addBindValue(fileData);
-    query.addBindValue(fileType);
-    
-    if (!query.exec()) {
-        QMessageBox::warning(this, QStringLiteral("SQL Error"), query.lastError().text());  
-    } else {
-        nameEdit->clear();
-        fileData.clear();
-        fileType.clear();
-        fileInfoLabel->setText(QString::fromStdWString(UIStrings::Get(UIKey::NoAttachment)));
-        uploadButton->setText(QString::fromStdWString(UIStrings::Get(UIKey::ChooseFile)));
-        loadRecords();
-    }
+int MainWindow::getTotalRowCount() {
+    QSqlQuery q("SELECT COUNT(*) FROM people");
+    if (q.next()) return q.value(0).toInt();
+    return 0;
 }
 
-void MainWindow::loadRecords() {
-    table->setRowCount(0);
-    QSqlQuery query("SELECT id, name, type FROM records");
-    if (!query.exec()) {
-        qDebug() << "Query error:" << query.lastError();
+void MainWindow::loadPage() {
+    int offset = currentPage * pageSize;
+    QString filter = searchEdit->text().trimmed();
+    QString where = filter.isEmpty() ? "" : QString("name LIKE '%%1%'").arg(filter);
+
+    QString queryStr = QString("SELECT * FROM people");
+    if (!where.isEmpty()) queryStr += " WHERE " + where;
+    queryStr += QString(" ORDER BY id ASC LIMIT %1 OFFSET %2").arg(pageSize).arg(offset);
+
+    // 检查数据库是否连接
+    if (!db.isOpen()) {
+        QMessageBox::critical(this, "Database Error", "Database is not open.");
         return;
     }
-    
-    int row = 0;
-    while (query.next()) {
-        table->insertRow(row);
-        for (int col = 0; col < 3; ++col) {
-            QTableWidgetItem *item = new QTableWidgetItem(query.value(col).toString());
-            table->setItem(row, col, item);
+
+    // 使用 QSqlQueryModel 来执行复杂查询
+    QSqlQueryModel *queryModel = new QSqlQueryModel(this);
+    queryModel->setQuery(queryStr, db);
+
+    if (queryModel->lastError().isValid()) {
+        qDebug() << "Query failed: " << queryModel->lastError();
+        return;
+    }
+
+    tableView->setModel(queryModel);  // 绑定到 QTableView
+
+    pageLabel->setText(QString("Page %1").arg(currentPage + 1));
+}
+
+
+void MainWindow::search() {
+    currentPage = 0;
+    loadPage();
+}
+
+void MainWindow::nextPage() {
+    if ((currentPage + 1) * pageSize >= getTotalRowCount()) return;
+    ++currentPage;
+    loadPage();
+}
+
+void MainWindow::prevPage() {
+    if (currentPage == 0) return;
+    --currentPage;
+    loadPage();
+}
+
+void MainWindow::addEntry() {
+    QSqlQuery q;
+    q.prepare("INSERT INTO people (name, age) VALUES (?, ?)");
+    q.addBindValue("User " + QString::number(rand() % 1000));
+    q.addBindValue(20 + rand() % 40);
+    if (!q.exec()) {
+        QMessageBox::warning(this, "Error", "Failed to insert data.");
+    }
+    loadPage();
+}
+
+void MainWindow::exportCSV() {
+    QString fileName = QFileDialog::getSaveFileName(this, "Export CSV", "", "CSV files (*.csv)");
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Error", "Cannot open file.");
+        return;
+    }
+
+    QTextStream out(&file);
+    QSqlRecord rec = model->record();
+
+    // Header
+    for (int i = 0; i < rec.count(); ++i) {
+        out << rec.fieldName(i);
+        if (i < rec.count() - 1) out << ",";
+    }
+    out << "\n";
+
+    // Data
+    for (int row = 0; row < model->rowCount(); ++row) {
+        for (int col = 0; col < rec.count(); ++col) {
+            out << model->data(model->index(row, col)).toString();
+            if (col < rec.count() - 1) out << ",";
         }
-        ++row;
-    }
-}
-
-bool MainWindow::isValidFile(const QString &filePath) {
-    QFileInfo info(filePath);
-    QString suffix = info.suffix().toLower();
-    return suffix == "png" || suffix == "jpg" || suffix == "jpeg" || suffix == "pdf";
-}
-
-void MainWindow::uploadAttachment() {
-    QString filter = QString::fromStdWString(UIStrings::Get(UIKey::SupportedFiles));
-    QString filePath = QFileDialog::getOpenFileName(
-        this, 
-        QString::fromStdWString(UIStrings::Get(UIKey::ChooseFile)), 
-        "", 
-        filter
-    );
-    
-    if (filePath.isEmpty()) 
-        return;
-
-    if (!isValidFile(filePath)) {
-        QString message = QString::fromStdWString(UIStrings::Get(UIKey::InvalidType))
-            .arg(QString::fromStdWString(UIStrings::Get(UIKey::OnlyAllow)));
-        QMessageBox::warning(this, QStringLiteral("Warning"), message);  // 修正参数顺序
-        return;
+        out << "\n";
     }
 
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(
-            this, 
-            QString::fromStdWString(UIStrings::Get(UIKey::FileReadFailed)), 
-            file.errorString()
-        );
-        return;
-    }
-
-    fileData = file.readAll();
-    fileType = QFileInfo(filePath).suffix().toLower();
-    fileInfoLabel->setText(QStringLiteral("文件大小：%1 字节，类型：%2")  
-        .arg(fileData.size())
-        .arg(fileType));
-    uploadButton->setText(QString::fromStdWString(UIStrings::Get(UIKey::ReplaceAttachment)));
-}
-
-void MainWindow::exportAttachment() {
-    QList<QTableWidgetSelectionRange> selected = table->selectedRanges();
-    if (selected.isEmpty()) {
-        QMessageBox::information(
-            this, 
-            QString(),  // 空标题
-            QString::fromStdWString(UIStrings::Get(UIKey::SelectRecordHint))  
-        );
-        return;
-    }
-
-    int row = selected.first().topRow();
-    QString id = table->item(row, 0)->text();
-
-    QSqlQuery query;
-    query.prepare("SELECT attachment, type FROM records WHERE id = ?");
-    query.addBindValue(id);
-    
-    if (!query.exec() || !query.next()) {
-        qDebug() << "Export query error:" << query.lastError();
-        return;
-    }
-
-    QByteArray data = query.value(0).toByteArray();
-    QString type = query.value(1).toString();
-    
-    if (data.isEmpty()) {
-        QMessageBox::information(
-            this, 
-            QString(), 
-            QString::fromStdWString(UIStrings::Get(UIKey::NoAttachmentInRecord))
-        );
-        return;
-    }
-
-    QString defaultName = QStringLiteral("附件_%1.%2").arg(id).arg(type);
-    QString filePath = QFileDialog::getSaveFileName(
-        this, 
-        QStringLiteral("保存附件"),  // 修正宽字符串
-        defaultName
-    );
-    
-    if (filePath.isEmpty()) return;
-
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        QMessageBox::warning(
-            this, 
-            QString::fromStdWString(UIStrings::Get(UIKey::SaveFailed)), 
-            file.errorString()
-        );
-        return;
-    }
-
-    if (file.write(data) == -1) {
-        qDebug() << "Write file error:" << file.errorString();
-    }
     file.close();
-
-    QMessageBox::information(
-        this, 
-        QString::fromStdWString(UIStrings::Get(UIKey::SaveSuccess)), 
-        QStringLiteral("附件已保存至：%1").arg(filePath)
-    );
+    QMessageBox::information(this, "Done", "Exported successfully.");
 }
