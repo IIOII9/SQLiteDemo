@@ -9,6 +9,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QSpinBox>
+#include <QComboBox>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -22,11 +23,13 @@ private slots:
     void prevPage();
     void addEntry();
     void exportCSV();
+    void deleteEntry();
 
 private:
     void setupUI();
     void loadPage();
     int getTotalRowCount();
+    QString getFilterText();
 
     QSqlDatabase db;
     QSqlTableModel *model;
@@ -37,9 +40,13 @@ private:
     QPushButton *prevButton;
     QPushButton *addButton;
     QPushButton *exportButton;
-    QPushButton *submitButton;
+    QPushButton *deleteButton;
     QLabel *pageLabel;
     QSpinBox *pageSizeSpin;
+    QComboBox *sortFieldCombo;
+    QComboBox *sortOrderCombo;
+    QSpinBox *jumpPageSpin;
+    QPushButton *jumpPageButton;
 
     int currentPage = 0;
     int pageSize = 10;
