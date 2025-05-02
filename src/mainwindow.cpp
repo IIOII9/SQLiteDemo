@@ -4,6 +4,7 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QTextStream>
+#include <QKeyEvent>
 #include <QDebug>
 
 #include "editablemodel.h"
@@ -45,8 +46,13 @@ void MainWindow::setupUI() {
 
     tableView = new QTableView();
     tableView->setModel(model);
-    tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    tableView->setSelectionBehavior(QAbstractItemView::SelectItems);  // 改为选中单元格
+    tableView->setSelectionMode(QAbstractItemView::SingleSelection);  // 保持单选
+    tableView->setEditTriggers(QAbstractItemView::CurrentChanged |
+        QAbstractItemView::SelectedClicked |
+        QAbstractItemView::EditKeyPressed);
+    tableView->installEventFilter(this);
 
     QHBoxLayout *controlLayout = new QHBoxLayout();
     prevButton = new QPushButton("Previous");
@@ -117,6 +123,41 @@ void MainWindow::setupUI() {
     setCentralWidget(central);
     resize(1000, 600);
 }
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    if (obj == tableView && event->type() == QEvent::KeyPress) {
+        auto *keyEvent = static_cast<QKeyEvent *>(event);
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            QModelIndex current = tableView->currentIndex();
+            if (!current.isValid()) return false;
+
+            int row = current.row();
+            int col = current.column();
+
+            // 提交当前编辑项（如果有编辑器）
+            tableView->closePersistentEditor(current);
+
+            // 移动到下一个单元格（支持跨行跳转）
+            int nextRow = row;
+            int nextCol = col + 1;
+            if (nextCol >= model->columnCount()) {
+                nextCol = 0;
+                ++nextRow;
+                if (nextRow >= model->rowCount()) {
+                    return true;  // 已是最后一个格
+                }
+            }
+
+            QModelIndex nextIndex = model->index(nextRow, nextCol);
+            tableView->setCurrentIndex(nextIndex);
+            tableView->edit(nextIndex);  // 自动进入编辑状态
+
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
+
 
 QString MainWindow::getSearchFilter() {
     QString keyword = searchEdit->text().trimmed();

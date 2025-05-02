@@ -10,7 +10,8 @@
           "C:/msys64/mingw64/include/c++/14.2.0/x86_64-w64-mingw32",
           "C:/msys64/mingw64/include/QtWidgets",
           "C:/msys64/mingw64/include/QtCore",
-          "C:/msys64/mingw64/include/QtSql"
+          "C:/msys64/mingw64/include/QtSql",
+          "C:/msys64/mingw64/include/QtGui"
         ],
         "defines": [
         "_DEBUG",
