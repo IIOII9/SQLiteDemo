@@ -44,8 +44,10 @@ add_executable(SQLiteDemo
     src/main.cpp
     src/mainwindow.cpp
     src/ui_strings.cpp 
+    src/editablemodel.cpp
     src/mainwindow.h
     src/ui_strings.h
+    src/editablemodel.h
 )
 
 target_link_libraries(SQLiteDemo PRIVATE Qt5::Widgets Qt5::Sql)

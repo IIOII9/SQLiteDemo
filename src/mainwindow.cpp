@@ -1,14 +1,12 @@
 #include "mainwindow.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QSqlRecord>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QTextStream>
-#include <QFile>
 #include <QDebug>
+
+#include "editablemodel.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     db = QSqlDatabase::addDatabase("QSQLITE");
@@ -21,20 +19,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     QSqlQuery q;
     q.exec("CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)");
 
-    model = new QSqlTableModel(this, db);
-    model->setTable("people");
-    model->setEditStrategy(QSqlTableModel::OnFieldChange);
+    EditableSqlModel *editableModel = new EditableSqlModel(this);
+    editableModel->setTableName("people");
+    editableModel->setPrimaryKeyColumn("id");
+    model = editableModel;
 
+    // model = new QSqlQueryModel(this);
     setupUI();
     loadPage();
 }
 
 MainWindow::~MainWindow() {}
-
-QString MainWindow::getFilterText() {
-    QString filter = searchEdit->text().trimmed();
-    return filter.isEmpty() ? "" : QString("name LIKE '%%1%'").arg(filter);
-}
 
 void MainWindow::setupUI() {
     QWidget *central = new QWidget(this);
@@ -50,17 +45,15 @@ void MainWindow::setupUI() {
 
     tableView = new QTableView();
     tableView->setModel(model);
-    tableView->setSortingEnabled(true);
     tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableView->setSelectionMode(QAbstractItemView::SingleSelection);
-    tableView->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
 
     QHBoxLayout *controlLayout = new QHBoxLayout();
     prevButton = new QPushButton("Previous");
     nextButton = new QPushButton("Next");
     addButton = new QPushButton("Add");
-    exportButton = new QPushButton("Export CSV");
     deleteButton = new QPushButton("Delete");
+    exportButton = new QPushButton("Export CSV");
     pageSizeSpin = new QSpinBox();
     pageSizeSpin->setRange(1, 100);
     pageSizeSpin->setValue(pageSize);
@@ -70,6 +63,7 @@ void MainWindow::setupUI() {
     sortFieldCombo->addItems({"id", "name", "age"});
     sortOrderCombo = new QComboBox();
     sortOrderCombo->addItems({"Ascending", "Descending"});
+
     connect(sortFieldCombo, &QComboBox::currentTextChanged, this, &MainWindow::loadPage);
     connect(sortOrderCombo, &QComboBox::currentTextChanged, this, &MainWindow::loadPage);
 
@@ -80,7 +74,7 @@ void MainWindow::setupUI() {
         int totalPages = (getTotalRowCount() + pageSize - 1) / pageSize;
         int targetPage = jumpPageSpin->value();
         if (targetPage < 1 || targetPage > totalPages) {
-            QMessageBox::warning(this, "Invalid Page", QString("Please enter a page number between 1 and %1.").arg(totalPages));
+            QMessageBox::warning(this, "Invalid Page", QString("Page must be 1 to %1").arg(totalPages));
             return;
         }
         currentPage = targetPage - 1;
@@ -124,34 +118,46 @@ void MainWindow::setupUI() {
     resize(1000, 600);
 }
 
+QString MainWindow::getSearchFilter() {
+    QString keyword = searchEdit->text().trimmed();
+    return keyword.isEmpty() ? "" : QString("WHERE name LIKE '%%1%'").arg(keyword);
+}
+
+QString MainWindow::getSortOrder() {
+    QString field = sortFieldCombo->currentText();
+    QString order = (sortOrderCombo->currentText() == "Ascending") ? "ASC" : "DESC";
+    return QString("ORDER BY %1 %2").arg(field, order);
+}
+
 int MainWindow::getTotalRowCount() {
-    QSqlQuery q("SELECT COUNT(*) FROM people");
+    QString filter = getSearchFilter();
+    QSqlQuery q("SELECT COUNT(*) FROM people " + filter);
     if (q.next()) return q.value(0).toInt();
     return 0;
 }
 
 void MainWindow::loadPage() {
-    if (!db.isOpen()) return;
-
-    QString filter = getFilterText();
-    model->setFilter(filter);
-
-    int column = sortFieldCombo->currentIndex();
-    Qt::SortOrder order = (sortOrderCombo->currentIndex() == 0) ? Qt::AscendingOrder : Qt::DescendingOrder;
-    model->setSort(column, order);
-    model->select();
-
-    int totalRows = model->rowCount();
-    int totalPages = (totalRows + pageSize - 1) / pageSize;
     int offset = currentPage * pageSize;
-
-    for (int row = 0; row < totalRows; ++row) {
-        tableView->setRowHidden(row, !(row >= offset && row < offset + pageSize));
+    QString sql = QString(
+        "SELECT * FROM people %1 %2 LIMIT %3 OFFSET %4")
+        .arg(getSearchFilter())
+        .arg(getSortOrder())
+        .arg(pageSize)
+        .arg(offset);
+    model->setQuery(sql);
+    updatePageInfo();
+    tableView->resizeColumnsToContents();
+    // 保存每一行的主键 id 到 model 中
+    for (int row = 0; row < model->rowCount(); ++row) {
+        int id = model->data(model->index(row, 0)).toInt();
+        static_cast<EditableSqlModel *>(model)->setPrimaryKeyAtRow(row, id);
     }
+}
 
+void MainWindow::updatePageInfo() {
+    int totalPages = (getTotalRowCount() + pageSize - 1) / pageSize;
     pageLabel->setText(QString("Page %1 / %2").arg(currentPage + 1).arg(qMax(1, totalPages)));
     jumpPageSpin->setMaximum(qMax(1, totalPages));
-    tableView->resizeColumnsToContents();
 }
 
 void MainWindow::search() {
@@ -159,16 +165,18 @@ void MainWindow::search() {
     loadPage();
 }
 
-void MainWindow::nextPage() {
-    if ((currentPage + 1) * pageSize >= model->rowCount()) return;
-    ++currentPage;
-    loadPage();
+void MainWindow::prevPage() {
+    if (currentPage > 0) {
+        --currentPage;
+        loadPage();
+    }
 }
 
-void MainWindow::prevPage() {
-    if (currentPage == 0) return;
-    --currentPage;
-    loadPage();
+void MainWindow::nextPage() {
+    if ((currentPage + 1) * pageSize < getTotalRowCount()) {
+        ++currentPage;
+        loadPage();
+    }
 }
 
 void MainWindow::addEntry() {
@@ -182,14 +190,24 @@ void MainWindow::addEntry() {
     loadPage();
 }
 
+int MainWindow::getPrimaryKeyOfRow(int row) {
+    QModelIndex index = model->index(row, 0); // assume id is first column
+    return model->data(index).toInt();
+}
+
 void MainWindow::deleteEntry() {
     QModelIndex index = tableView->currentIndex();
     if (!index.isValid()) {
-        QMessageBox::warning(this, "Delete", "Please select a row to delete.");
+        QMessageBox::warning(this, "Delete", "Select a row to delete.");
         return;
     }
-    model->removeRow(index.row());
-    model->submitAll();
+    int id = getPrimaryKeyOfRow(index.row());
+    QSqlQuery q;
+    q.prepare("DELETE FROM people WHERE id = ?");
+    q.addBindValue(id);
+    if (!q.exec()) {
+        QMessageBox::warning(this, "Error", "Failed to delete row.");
+    }
     loadPage();
 }
 
@@ -204,18 +222,16 @@ void MainWindow::exportCSV() {
     }
 
     QTextStream out(&file);
-    QSqlRecord rec = model->record();
-
-    for (int i = 0; i < rec.count(); ++i) {
-        out << rec.fieldName(i);
-        if (i < rec.count() - 1) out << ",";
+    for (int i = 0; i < model->columnCount(); ++i) {
+        out << model->headerData(i, Qt::Horizontal).toString();
+        if (i < model->columnCount() - 1) out << ",";
     }
     out << "\n";
 
     for (int row = 0; row < model->rowCount(); ++row) {
-        for (int col = 0; col < rec.count(); ++col) {
+        for (int col = 0; col < model->columnCount(); ++col) {
             out << model->data(model->index(row, col)).toString();
-            if (col < rec.count() - 1) out << ",";
+            if (col < model->columnCount() - 1) out << ",";
         }
         out << "\n";
     }

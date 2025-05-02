@@ -2,54 +2,57 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QSqlDatabase>
-#include <QSqlTableModel>
+#include <QtSql>
 #include <QTableView>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QLabel>
 #include <QSpinBox>
 #include <QComboBox>
+#include <QLabel>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
+
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-private slots:
-    void search();
-    void nextPage();
-    void prevPage();
-    void addEntry();
-    void exportCSV();
-    void deleteEntry();
-
 private:
-    void setupUI();
-    void loadPage();
-    int getTotalRowCount();
-    QString getFilterText();
-
     QSqlDatabase db;
-    QSqlTableModel *model;
+    QSqlQueryModel *model;
     QTableView *tableView;
     QLineEdit *searchEdit;
     QPushButton *searchButton;
-    QPushButton *nextButton;
     QPushButton *prevButton;
+    QPushButton *nextButton;
     QPushButton *addButton;
-    QPushButton *exportButton;
     QPushButton *deleteButton;
-    QLabel *pageLabel;
+    QPushButton *exportButton;
     QSpinBox *pageSizeSpin;
-    QComboBox *sortFieldCombo;
-    QComboBox *sortOrderCombo;
     QSpinBox *jumpPageSpin;
     QPushButton *jumpPageButton;
+    QComboBox *sortFieldCombo;
+    QComboBox *sortOrderCombo;
+    QLabel *pageLabel;
 
     int currentPage = 0;
     int pageSize = 10;
+
+    void setupUI();
+    void loadPage();
+    void updatePageInfo();
+    int getTotalRowCount();
+    QString getSortOrder();
+    QString getSearchFilter();
+    int getPrimaryKeyOfRow(int row);
+
+private slots:
+    void search();
+    void prevPage();
+    void nextPage();
+    void addEntry();
+    void deleteEntry();
+    void exportCSV();
 };
 
 #endif // MAINWINDOW_H
