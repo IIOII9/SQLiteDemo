@@ -37,6 +37,7 @@ private:
     QPushButton *prevButton;
     QPushButton *addButton;
     QPushButton *exportButton;
+    QPushButton *submitButton;
     QLabel *pageLabel;
     QSpinBox *pageSizeSpin;
 
