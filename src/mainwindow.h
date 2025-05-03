@@ -22,6 +22,8 @@ private:
     QString getSearchFillter();
     QString getSortOrder();
     void updatePageInfo();
+    int getTotalRowCount();
+    int getPrimaryKeyOfRow(int row);
 private:
     QLineEdit* searchEdit;
     QPushButton* searchButton;
@@ -50,5 +52,6 @@ private slots:
     void onAddClick();
     void onDeleteClick();
     void onExportCVSClick();
+    void onJumpPageButtonClick();
 };
 #endif

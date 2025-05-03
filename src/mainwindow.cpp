@@ -2,6 +2,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QFileDialog>
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent){
@@ -32,10 +33,18 @@ void MainWindow::setupUI(){
     QHBoxLayout* controllLayout = new QHBoxLayout();
     mainLaylout->addLayout(controllLayout);
     prevButton = new QPushButton("Previous");
+    connect(prevButton, &QPushButton::clicked, this, &MainWindow::onPrePageClick);
     nextButton = new QPushButton("Next");
+    connect(nextButton, &QPushButton::clicked, this, &MainWindow::onNextPageClick);
     pageSizeSpin = new QSpinBox();
     pageSizeSpin->setRange(1, 100);
     pageSizeSpin->setValue(pageSize);
+    connect(pageSizeSpin, qOverload<int>(&QSpinBox::valueChanged), 
+        [=](int val){
+            pageSize = val;
+            currentPage = 0;
+            loadPage();
+        });
     pageLabel = new QLabel();   //页码
     sortFieldCombo = new QComboBox();
     sortFieldCombo->addItems({"id", "name", "age"});
@@ -51,8 +60,10 @@ void MainWindow::setupUI(){
     connect(exportButton, &QPushButton::clicked, this, &MainWindow::onExportCVSClick);
 
     jumpPageSpin = new QSpinBox();
+    jumpPageSpin->setMinimum(1);
     jumpPageButton = new QPushButton("Go");
-    
+    connect(jumpPageButton, &QPushButton::clicked, this, &MainWindow::onJumpPageButtonClick);
+
     controllLayout->addWidget(prevButton);
     controllLayout->addWidget(nextButton);
     controllLayout->addWidget(new QLabel("Page size:"));
@@ -122,19 +133,31 @@ QString MainWindow::getSortOrder()
 
 void MainWindow::updatePageInfo()
 {
-
+    int totalPages = (getTotalRowCount() + pageSize - 1) / pageSize;
+    pageLabel->setText(QString("Page %1 / %2").arg(currentPage + 1)
+        .arg(qMax(1, totalPages)));
+    jumpPageSpin->setMaximum(qMax(1, totalPages));
 }
 void MainWindow::onSearchClick()
 {
-
+    currentPage = 0;
+    loadPage();
 }
 void MainWindow::onPrePageClick()
 {
-
+    if(currentPage > 0)
+    {
+      --currentPage;
+      loadPage();
+    }   
 }
 void MainWindow::onNextPageClick()
 {
-
+    if((currentPage + 1) * pageSize < getTotalRowCount())
+    {
+        ++currentPage;
+        loadPage();
+    }
 }
 void MainWindow::onAddClick()
 {
@@ -149,9 +172,73 @@ void MainWindow::onAddClick()
 }
 void MainWindow::MainWindow::onDeleteClick()
 {
-
+    QModelIndex index = tableView->currentIndex();
+    if (!index.isValid())
+    {
+        QMessageBox::warning(this, "Delete", "Select a row to delete.");
+        return;
+    }
+    int id = getPrimaryKeyOfRow(index.row());
+    QSqlQuery query;
+    query.prepare("DELETE FROM people WHERE id = ?");
+    query.addBindValue(id);
+    if(!query.exec()){
+        QMessageBox::warning(this, "Error", "Failed to delete row." + query.lastError().text());
+    }
+    loadPage();
 }
 void MainWindow::onExportCVSClick()
 {
+    QString fileName = QFileDialog::getSaveFileName(this, "Export CVS", "",
+        "CSV files (*.csv)");
+    if(fileName.isEmpty())
+        return;
+    
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        QMessageBox::warning(this, "Error", "Can not open file");
+        return;
+    }
 
+    QTextStream out(&file);
+    for(int i = 0; i < model->columnCount(); ++i){
+        out << model->headerData(i, Qt::Horizontal).toString();
+        if (i < model->columnCount() - 1)
+            out  << ",";
+    }
+    out << "\n";
+    for(int row = 0; row < model->rowCount(); ++row)
+    {
+        for (int col = 0; col < model->columnCount(); ++col){
+            out << model->data(model->index(row, col)).toString();
+            if (col < model->columnCount() - 1)
+                out << ",";
+        }
+        out << "\n";
+    }
+    file.close();
+    QMessageBox::information(this, "Exprot CSV", "Exported successfully.");
+}
+
+void MainWindow::onJumpPageButtonClick()
+{
+    currentPage = jumpPageSpin->value() - 1;
+    loadPage();
+}
+
+int MainWindow::getTotalRowCount()
+{
+    QString filter = getSearchFillter();
+    QSqlQuery query("SELECT COUNT(*) FROM people " + filter);
+    if (query.next())
+        return query.value(0).toInt();
+    else
+        QMessageBox::warning(this, "Error", query.lastError().text());   
+    return 0;
+}
+
+int MainWindow::getPrimaryKeyOfRow(int row)
+{
+    QModelIndex index = model->index(row, 0);
+    return model->data(index).toInt();
 }
