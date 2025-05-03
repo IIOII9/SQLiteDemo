@@ -43,10 +43,8 @@ find_package(Qt5 REQUIRED COMPONENTS Core Widgets Sql)
 add_executable(SQLiteDemo
     src/main.cpp
     src/mainwindow.cpp
-    src/ui_strings.cpp 
     src/editablemodel.cpp
     src/mainwindow.h
-    src/ui_strings.h
     src/editablemodel.h
 )
 

@@ -2,58 +2,53 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QtSql>
-#include <QTableView>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QtSql>
+#include <QTableView>
 
-class MainWindow : public QMainWindow {
+class MainWindow: public QMainWindow{
     Q_OBJECT
-
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-protected:
-    bool eventFilter(QObject *obj, QEvent *event) override;
+private:
+    void setupUI();   
+    void initDB(); 
+    void loadPage();
+    QString getSearchFillter();
+    QString getSortOrder();
+    void updatePageInfo();
+private:
+    QLineEdit* searchEdit;
+    QPushButton* searchButton;
+    QTableView* tableView;
+    QPushButton* prevButton;
+    QPushButton* nextButton;
+    QSpinBox* pageSizeSpin;
+    QLabel* pageLabel;
+    QSpinBox* jumpPageSpin;
+    QPushButton* jumpPageButton;
+    QComboBox* sortFieldCombo;
+    QComboBox* sortOrderCombo;
+    QPushButton* addButton;
+    QPushButton* deleteButton;
+    QPushButton* exportButton;
+
 private:
     QSqlDatabase db;
-    QSqlQueryModel *model;
-    QTableView *tableView;
-    QLineEdit *searchEdit;
-    QPushButton *searchButton;
-    QPushButton *prevButton;
-    QPushButton *nextButton;
-    QPushButton *addButton;
-    QPushButton *deleteButton;
-    QPushButton *exportButton;
-    QSpinBox *pageSizeSpin;
-    QSpinBox *jumpPageSpin;
-    QPushButton *jumpPageButton;
-    QComboBox *sortFieldCombo;
-    QComboBox *sortOrderCombo;
-    QLabel *pageLabel;
-
+    QSqlQueryModel* model;
     int currentPage = 0;
     int pageSize = 10;
-
-    void setupUI();
-    void loadPage();
-    void updatePageInfo();
-    int getTotalRowCount();
-    QString getSortOrder();
-    QString getSearchFilter();
-    int getPrimaryKeyOfRow(int row);
-
 private slots:
-    void search();
-    void prevPage();
-    void nextPage();
-    void addEntry();
-    void deleteEntry();
-    void exportCSV();
+    void onSearchClick();
+    void onPrePageClick();
+    void onNextPageClick();
+    void onAddClick();
+    void onDeleteClick();
+    void onExportCVSClick();
 };
-
-#endif // MAINWINDOW_H
+#endif
