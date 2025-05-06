@@ -108,6 +108,7 @@ void MainWindow::initDB()
     model = new EditableQueryModel(this);
     model->setDB(db);
     model->setTableName("people");
+    model->setPrimaryKeyColumn("id");
 }
 
 void MainWindow::loadPage()
@@ -121,6 +122,10 @@ void MainWindow::loadPage()
         .arg(offset);
     model->setQuery(sqlText);
     updatePageInfo();
+    for (int row = 0; row < model->rowCount(); ++row){
+        int id = model->data(model->index(row, 0)).toInt();
+        model->setPrimaryKeyAtRow(row, id);
+    }
 }
 
 QString MainWindow::getSearchFillter()

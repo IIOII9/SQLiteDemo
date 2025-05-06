@@ -21,22 +21,24 @@ void EditableTableView::keyPressEvent(QKeyEvent *event) {
         if (state() == EditingState) {
             QWidget *editor = indexWidget(current);
             if (editor) {
-                commitData(editor);
-                closeEditor(editor, QAbstractItemDelegate::SubmitModelCache);
+                commitData(editor);  // 提交数据到模型
+                closeEditor(editor, QAbstractItemDelegate::SubmitModelCache);  // 关闭编辑器
             }
+            // closePersistentEditor(current);
         }    
 
         int row = current.row();
         int col = current.column() + 1;
 
         if (col >= model()->columnCount()) {
-            col = 0;
+            col = 1;
             row++;
         }
 
         if (row < model()->rowCount()) {
             QModelIndex nextIndex = model()->index(row, col);
             setCurrentIndex(nextIndex);
+            // setCurrentIndex(nextIndex);
             edit(nextIndex);  // 自动编辑下一个单元格
         }
         return;
