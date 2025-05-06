@@ -9,7 +9,7 @@
 #include <QLabel>
 #include <QtSql>
 #include <QTableView>
-
+#include "editablequerymodel.h"
 class MainWindow: public QMainWindow{
     Q_OBJECT
 public:
@@ -42,7 +42,8 @@ private:
 
 private:
     QSqlDatabase db;
-    QSqlQueryModel* model;
+    // QSqlQueryModel* model;
+    EditableQueryModel* model;
     int currentPage = 0;
     int pageSize = 10;
 private slots:

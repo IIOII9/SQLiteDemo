@@ -5,6 +5,8 @@
 #include <QFileDialog>
 #include <QDebug>
 
+#include "editabletableview.h"
+
 MainWindow::MainWindow(QWidget *parent): QMainWindow(parent){
     initDB();
     setupUI();
@@ -26,10 +28,14 @@ void MainWindow::setupUI(){
     searchLayout->addWidget(searchEdit);
     searchLayout->addWidget(searchButton);
     
-    tableView = new QTableView();
+    //tableView = new QTableView();
+    tableView = new EditableTableView();
+    tableView->setItemDelegate(new QItemDelegate(this));
     tableView->setModel(model);
     mainLaylout->addWidget(tableView);
-
+    tableView->setSelectionBehavior(QAbstractItemView::SelectItems);
+    tableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    
     QHBoxLayout* controllLayout = new QHBoxLayout();
     mainLaylout->addLayout(controllLayout);
     prevButton = new QPushButton("Previous");
@@ -96,9 +102,12 @@ void MainWindow::initDB()
     }
     QSqlQuery query;
      QString sqlText = "CREATE TABLE IF NOT EXISTS people (id INTEGER PRIMARY KEY "
-        " AUTOINCREMENT, name TEXT, age INTEGER)";
+        " AUTOINCREMENT, name TEXT, age INTEGER, photo	BLOB)";
     query.exec(sqlText);
-    model = new QSqlQueryModel(this);
+    //model = new QSqlQueryModel(this);
+    model = new EditableQueryModel(this);
+    model->setDB(db);
+    model->setTableName("people");
 }
 
 void MainWindow::loadPage()
